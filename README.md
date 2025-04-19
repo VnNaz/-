@@ -69,7 +69,8 @@ create index on t2 (day desc);
 ![Pasted image 20250416165303](https://github.com/user-attachments/assets/0d242709-a180-422e-85e6-5e2e84b68c3f)
 
 После создания индекса повторно запускаем `EXPLAIN ANALYZE`:
-![[Pasted image 20250416165407.png]]
+
+![Pasted image 20250416165407](https://github.com/user-attachments/assets/9d0162c1-fbff-4d1d-bfb5-940e774ae7c3)
 
 Время выполнения запроса сократилось примерно до 5 мс, что на порядки быстрее, чем без индекса
 # Третья задача 
@@ -89,13 +90,13 @@ create table t2_test as
 select * from t2
 limit 5000;
 ```
-![[Pasted image 20250416170600.png]]
+![Pasted image 20250416170600](https://github.com/user-attachments/assets/155e8985-330d-42cf-965c-571fc64bdbf7)
 
 Проводим анализ запроса на новой, укороченной таблице
 ```sql
 explain analyze select day from t2_test where t_id not in ( select t1_test.id from t1_test );
 ```
-![[Pasted image 20250416170733.png]]
+![Pasted image 20250416170733](https://github.com/user-attachments/assets/08bdfe7f-75ed-47b2-a8d2-ae081e3b5f13)
 
 С помощью плана выполнения мы узнали следующее:
 - Сначала выполняется последовательный скан таблицы `t1` с хешированием значения `id`.
@@ -116,8 +117,8 @@ select day from t2 where not exists ( select 1 from t1 where t_id = id);
 ```sql
 explain analyze select day from t2_test where not exists ( select 1 from t1_test where t1_test.id = t2_test.t_id);
 ```
+![Pasted image 20250416171509](https://github.com/user-attachments/assets/e1545dbe-8373-43a7-942a-66fcdfbf1842)
 
-![[Pasted image 20250416171509.png]]
 Для соединения хеширования  
 - Первым этапом в памяти строится хеш-таблица: строки `t1` читаются последовательно, и для каждой из них вычисляется хеш-функция от значений полей, входящих в условие соединения (в нашем примере это числовые идентификаторы `id`). Размер хеш-таблицы в памяти ограничен значением `work_mem × hash_mem_multiplier`.  Наилучшая эффективность достигается, если вся хеш-таблица помещается в этот объём памяти целиком (источник — курс QPT). Но в нашем примере, скорее всего, места в памяти не будет хватать.
 - Сопоставление: на втором этапе мы последовательно читаем второй набор строк. Если с таким же хеш-кодом мы нашли пару — происходит сопоставление.
@@ -129,12 +130,14 @@ alter system set work_mem to '128MB';
 alter system set hash_mem_multiplier to '12';
 select pg_reload_conf();
 ```
-![[Pasted image 20250416172456.png]]
+![Pasted image 20250416172456](https://github.com/user-attachments/assets/469b4997-2049-4fb7-ad86-1a4c64e2cf01)
+
 Cнова анализуем запрос
 ```sql
 explain analyze select day from t2 where not exists ( select 1 from t1 where t1.id = t2.t_id);
 ```
-![[Pasted image 20250416172655.png]]
+![Pasted image 20250416172655](https://github.com/user-attachments/assets/7c42c693-c481-4534-8ac6-95b6b59db52f)
+
 Время выполнения запроса сократилось примерно 7 секунд.
 # Четвертая задача
 
@@ -142,7 +145,7 @@ explain analyze select day from t2 where not exists ( select 1 from t1 where t1.
 explain analyze select day from t2 where t_id in ( select t1.id from t1 where t2.t_id = t1.id) and day > to_char(date_trunc('day',now()- '1 months'::interval),'yyyymmdd');
 ```
 Анализуем данный запрос
-![[Pasted image 20250416172942.png]]
+![Pasted image 20250416172942](https://github.com/user-attachments/assets/97486712-dc61-4f59-b958-97a0e76d1076)
 
 Здорово, что мы **ничего не меняли**, а запрос уже выполняется примерно за **10 секунд** — можно было бы сказать, что задача решена. Но это не наша цель - нам важно понять, почему запрос изначально работал медленно, а не просто добиться результата.
 Убираем созданные индексы
@@ -150,12 +153,14 @@ explain analyze select day from t2 where t_id in ( select t1.id from t1 where t2
 drop index t1_id_idx;
 drop index t2_day_idx;
 ```
-![[Pasted image 20250416175133.png]]
+![Pasted image 20250416175133](https://github.com/user-attachments/assets/fa49ffc8-aac9-4aae-ad6b-0fcdf7a1746a)
+
  Анализируем запрос в укороченных таблицах
 ```sql
 explain analyze select day from t2_test where t_id in ( select t1_test.id from t1_test where t2_test.t_id = t1_test.id) and day > to_char(date_trunc('day',now()- '1 months'::interval),'yyyymmdd');
 ```
-![[Pasted image 20250416180300.png]]
+![Pasted image 20250416180300](https://github.com/user-attachments/assets/564bf5c6-9c31-4790-892d-41fab6031ef3)
+
 Из плана выполнения видно:
 - Выполняется последовательный скан всей таблицы `t2_test`.  
 - Применяются две фильтрации:  
@@ -167,21 +172,19 @@ explain analyze select day from t2_test where t_id in ( select t1_test.id from t
 ```sql
 create index on t2 (day desc);
 ```
-![[Pasted image 20250416181920.png]]
+![Pasted image 20250416181920](https://github.com/user-attachments/assets/16117438-0a70-4ad9-8e59-953cea313adf)
+
 Вторая часть (поиск `id` в `t1`) тоже может быть ускорена, если использовать индекс:
 ```sql
 create index on t1 using hash(id);
 ```
-![[Pasted image 20250416181644.png]]
+![Pasted image 20250416181644](https://github.com/user-attachments/assets/8075eedb-3403-4255-b88b-a6d33e2778bc)
+
 Теперь повторно анализируем запрос, но уже не в укороченных таблицах, а на реальных данных
 ```sql
 explain analyze select day from t2 where t_id in ( select t1.id from t1 where t2.t_id = t1.id) and day > to_char(date_trunc('day',now()- '1 months'::interval),'yyyymmdd');
 ```
-![[Pasted image 20250416182043.png]]
+![Pasted image 20250416182043](https://github.com/user-attachments/assets/a234489c-5307-4e9f-9914-e362f37b6aa2)
+
 Время выполнения запроса сократилось примерно 6 мс, добился результата
 
-
-```sql
-psql -c 'select txid_current(); select pg_sleep(3600);' &
-pgbench -p 5432 -rn -P1 -c10 -T3600 -M prepared -f generate_100_subtrans.sql 2>&1 > generate_100_subtrans_pgbench.log
-```
