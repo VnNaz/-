@@ -8,7 +8,8 @@ select name from t1 where id = 50000;
 ```sql
 explain analyze select name from t1 where id = 50000;
 ```
-![[Pasted image 20250313085642.png]]
+![Pasted image 20250313085642](https://github.com/user-attachments/assets/98e85a0d-709d-466d-b21a-0e164d899184)
+
 Результаты выполнения показывают, что используется последовательное сканирование (Seq Scan), несмотря на то, что нам нужна всего одна строка из 10 миллионов - высокая селективность (нужно извлечь одну строку из миллионов) — это явный сигнал к тому, что следует использовать индекс.
 
 Теперь наша задача — создать индекс на колонку `id` таблицы `t1`.  
@@ -23,7 +24,8 @@ from pg_am a,
 unnest(array['can_order','can_unique','can_multi_col','can_exclude']) p(name)
 where a.amname = 'hash' order by a.amname;
 ```
-![[Pasted image 20250416163213.png]]
+![Pasted image 20250416163213](https://github.com/user-attachments/assets/4fd17e11-b978-46fa-a3dd-7f632cdad97c)
+
 - В большинстве случаев `B-tree` остаётся универсальнее, но если точно знаешь, что запросы всегда будут вида `WHERE id = ...`, можно использовать `Hash` (Hash-индекс может быть много быстрее [Hash indexes are faster than Btree indexes?](https://amitkapila16.blogspot.com/2017/03/hash-indexes-are-faster-than-btree.html))
 
 В данной ситуации используется **Hash-индекс**, так как запрос выполняется по точному совпадению значения (`id = 50000`), а значит, такой тип индекса подходит.
@@ -31,9 +33,12 @@ where a.amname = 'hash' order by a.amname;
 ```sql
 create index on t1 using hash(id);
 ```
-![[Pasted image 20250416164348.png]]
+![Pasted image 20250416164348](https://github.com/user-attachments/assets/697ae8d1-0084-4c54-980d-6044d369e0a3)
+
 После создания индекса повторно запускаем `EXPLAIN ANALYZE`:
-![[Pasted image 20250416164440.png]]
+
+![Pasted image 20250416164440](https://github.com/user-attachments/assets/5c05923b-54bb-4f7e-9e00-4f7d0977ac9d)
+
 Время выполнения запроса сократилось примерно до 5 мс, что на порядки быстрее, чем без индекса
 
 # Вторая задача
